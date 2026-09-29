@@ -68,6 +68,13 @@ describe(parseIdpMetadata.name, () => {
         ]);
     });
 
+    it('accepts metadata with leading whitespace or a UTF-8 BOM', () => {
+        const expected = parseIdpMetadata(createAdfsMetadata());
+
+        assert.deepEquals(parseIdpMetadata(`\n  ${createAdfsMetadata()}`), expected);
+        assert.deepEquals(parseIdpMetadata(`\uFEFF${createAdfsMetadata()}`), expected);
+    });
+
     it('produces settings that verify a real response', async () => {
         const parsed = parseIdpMetadata(createAdfsMetadata());
 

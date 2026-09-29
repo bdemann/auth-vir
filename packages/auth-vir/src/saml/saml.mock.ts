@@ -47,6 +47,8 @@ export type MockSamlResponseParams = Partial<{
     notBefore: FullDate<UtcTimezone>;
     /** Defaults to five minutes from now. */
     notOnOrAfter: FullDate<UtcTimezone>;
+    /** The bearer SubjectConfirmationData's NotOnOrAfter. Defaults to `notOnOrAfter`. */
+    subjectNotOnOrAfter: FullDate<UtcTimezone>;
     attributes: Readonly<Record<string, ReadonlyArray<string>>>;
     /** Which element(s) to sign. */
     signedElements: 'assertion' | 'response' | 'both' | 'none';
@@ -117,6 +119,9 @@ export function createMockSamlResponseXml(params: MockSamlResponseParams = {}): 
                 minutes: 5,
             }),
     );
+    const subjectNotOnOrAfter = params.subjectNotOnOrAfter
+        ? toUtcIsoString(params.subjectNotOnOrAfter)
+        : notOnOrAfter;
     const issueInstant = toUtcIsoString(getNowInUtcTimezone());
     const recipient = escapeXml(params.recipient ?? mockSaml.acsUrl);
     const audiences = (params.audiences || [mockSaml.spEntityId])
@@ -150,7 +155,7 @@ export function createMockSamlResponseXml(params: MockSamlResponseParams = {}): 
         '<saml:Subject>',
         `<saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">${escapeXml(params.nameId ?? mockSaml.nameId)}</saml:NameID>`,
         '<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">',
-        `<saml:SubjectConfirmationData NotOnOrAfter="${notOnOrAfter}" Recipient="${recipient}"/>`,
+        `<saml:SubjectConfirmationData NotOnOrAfter="${subjectNotOnOrAfter}" Recipient="${recipient}"/>`,
         '</saml:SubjectConfirmation>',
         '</saml:Subject>',
         `<saml:Conditions NotBefore="${notBefore}" NotOnOrAfter="${notOnOrAfter}">`,

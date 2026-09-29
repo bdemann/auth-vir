@@ -8,7 +8,7 @@ import {
     type Document as XmlDocument,
     XMLSerializer,
 } from '@xmldom/xmldom';
-import {type FullDate, getNowInIsoString, type UtcTimezone} from 'date-vir';
+import {calculateRelativeDate, type FullDate, getNowInIsoString, type UtcTimezone} from 'date-vir';
 import {
     createMockReplayStore,
     createMockSamlResponse,
@@ -19,6 +19,7 @@ import {
     mockSaml,
 } from './saml.mock.js';
 import {
+    defaultSamlClockSkew,
     SamlVerifyFailureReason,
     verifySamlResponse,
     type VerifySamlResponseParams,
@@ -396,6 +397,34 @@ describe(verifySamlResponse.name, () => {
             );
         });
 
+        it('rejects expired Conditions when the subject confirmation is still valid', async () => {
+            await assertRejected(
+                createMockSamlResponse({
+                    notBefore: fromNow({
+                        minutes: -20,
+                    }),
+                    notOnOrAfter: fromNow({
+                        minutes: -10,
+                    }),
+                    subjectNotOnOrAfter: fromNow({
+                        minutes: 4,
+                    }),
+                }),
+                SamlVerifyFailureReason.Expired,
+            );
+        });
+
+        it('rejects an expired subject confirmation when Conditions are still valid', async () => {
+            await assertRejected(
+                createMockSamlResponse({
+                    subjectNotOnOrAfter: fromNow({
+                        minutes: -10,
+                    }),
+                }),
+                SamlVerifyFailureReason.Expired,
+            );
+        });
+
         it('allows a response that expired within the clock skew', async () => {
             const result = await verify(
                 createMockSamlResponse({
@@ -493,7 +522,7 @@ describe(verifySamlResponse.name, () => {
             );
         });
 
-        it('passes the assertion expiry to the store', async () => {
+        it('passes the assertion expiry plus the clock skew to the store', async () => {
             const notOnOrAfter = fromNow({
                 minutes: 3,
             });
@@ -517,7 +546,7 @@ describe(verifySamlResponse.name, () => {
             assert.deepEquals(calls, [
                 {
                     assertionId: '_expiry',
-                    expiresAt: notOnOrAfter,
+                    expiresAt: calculateRelativeDate(notOnOrAfter, defaultSamlClockSkew),
                 },
             ]);
         });

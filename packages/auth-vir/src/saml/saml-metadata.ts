@@ -43,7 +43,8 @@ const ssoBindingPreference = [
  * @category SAML
  */
 export function parseIdpMetadata(metadataXml: string): ParsedIdpMetadata {
-    const entityDescriptor = parseStrictXml(metadataXml);
+    /** `trimStart` also removes a UTF-8 BOM, which Node keeps when reading a file as utf8. */
+    const entityDescriptor = parseStrictXml(metadataXml.trimStart());
 
     if (!isXmlElement(entityDescriptor, SamlNamespace.Metadata, 'EntityDescriptor')) {
         throw new Error('Metadata root element must be a SAML 2.0 EntityDescriptor.');

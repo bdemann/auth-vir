@@ -45,8 +45,9 @@ export type SamlIdpSettings = Readonly<{
 export type SamlAssertionReplayStore = Readonly<{
     /**
      * Atomically record that an assertion ID has been used. Must return `false` if the ID was
-     * already recorded (and `true` otherwise). The record only needs to be kept until `expiresAt`;
-     * after that the assertion is rejected as expired anyway.
+     * already recorded (and `true` otherwise). The record only needs to be kept until `expiresAt`
+     * (the assertion's `NotOnOrAfter` plus the allowed clock skew); after that the assertion is
+     * rejected as expired anyway.
      *
      * This is only called after every other check has passed, so forged messages can never use up a
      * legitimate assertion ID.
@@ -215,7 +216,7 @@ export async function verifySamlResponse(
         if (
             !(await params.replayStore.markAssertionUsed({
                 assertionId: profile.assertionId,
-                expiresAt: profile.notOnOrAfter,
+                expiresAt: createUtcFullDate(toTimestamp(profile.notOnOrAfter) + clockSkewMs),
             }))
         ) {
             throw new SamlVerifyError(

@@ -7,3 +7,4 @@ export const testPrismaConfigFilePath = join(
     'test-files',
     'prisma.config.ts',
 );
+export const samlTestFilesDirPath = join(authVirPackageDirPath, 'test-files', 'saml');

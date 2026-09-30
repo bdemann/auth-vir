@@ -1,3 +1,4 @@
+// cspell:words adfs idpsso nameid spsso
 import {assert, assertWrap} from '@augment-vir/assert';
 import {describe, it} from '@augment-vir/test';
 import {DOMParser, MIME_TYPE} from '@xmldom/xmldom';

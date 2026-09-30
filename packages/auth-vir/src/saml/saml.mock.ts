@@ -1,3 +1,4 @@
+// cspell:words adfs nameid samlp
 import {
     type AnyDuration,
     calculateRelativeDate,

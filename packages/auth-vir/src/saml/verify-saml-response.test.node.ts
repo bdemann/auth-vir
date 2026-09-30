@@ -1,3 +1,4 @@
+// cspell:words msis nameid samlp
 /* eslint-disable unicorn/prefer-dom-node-append, unicorn/prefer-dom-node-remove, unicorn/prefer-modern-dom-apis -- xmldom does not implement the modern DOM methods these rules suggest. */
 import {assert, assertWrap} from '@augment-vir/assert';
 import {describe, it} from '@augment-vir/test';

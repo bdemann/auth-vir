@@ -1,3 +1,4 @@
+// cspell:words dsig
 import {DOMParser, type Element, MIME_TYPE, type Node} from '@xmldom/xmldom';
 
 /**

@@ -1,3 +1,4 @@
+// cspell:words adfs
 import {
     extractErrorMessage,
     type MaybePromise,

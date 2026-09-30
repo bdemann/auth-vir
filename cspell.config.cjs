@@ -8,12 +8,5 @@ module.exports = {
     ],
     words: [
         ...baseConfig.words,
-        'ADFS',
-        'dsig',
-        'IDPSSO',
-        'MSIS',
-        'nameid',
-        'samlp',
-        'SPSSO',
     ],
 };

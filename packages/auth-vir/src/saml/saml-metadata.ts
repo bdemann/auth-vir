@@ -1,3 +1,4 @@
+// cspell:words adfs dsig idpsso nameid
 import {removeDuplicates, type PartialWithUndefined} from '@augment-vir/common';
 import {generateServiceProviderMetadata} from '@node-saml/node-saml';
 import {type Element} from '@xmldom/xmldom';

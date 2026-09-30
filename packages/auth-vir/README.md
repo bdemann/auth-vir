@@ -1,3 +1,5 @@
+<!-- cspell:words adfs -->
+
 # auth-vir
 
 Auth made easy and secure via JWT cookies, CSRF tokens, and password hashing helpers. ESM and browser friendly.

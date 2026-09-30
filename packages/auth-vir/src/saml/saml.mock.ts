@@ -51,7 +51,6 @@ export type MockSamlResponseParams = Partial<{
     /** The bearer SubjectConfirmationData's NotOnOrAfter. Defaults to `notOnOrAfter`. */
     subjectNotOnOrAfter: FullDate<UtcTimezone>;
     attributes: Readonly<Record<string, ReadonlyArray<string>>>;
-    /** Which element(s) to sign. */
     signedElements: 'assertion' | 'response' | 'both' | 'none';
     signingKey: MockIdpKeyPair;
 }>;
@@ -191,7 +190,6 @@ export function createMockSamlResponse(params: MockSamlResponseParams = {}): str
     return encodeSamlResponse(createMockSamlResponseXml(params));
 }
 
-/** A replay store backed by an in-memory Set, matching the contract a database table would have. */
 export function createMockReplayStore() {
     const usedAssertionIds = new Set<string>();
 

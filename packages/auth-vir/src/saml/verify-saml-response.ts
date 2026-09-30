@@ -123,7 +123,7 @@ export type VerifiedSamlProfile = {
     nameId: string;
     nameIdFormat: string | undefined;
     assertionId: string;
-    /** When the assertion stops being valid. */
+    /** The earlier of the Conditions and bearer SubjectConfirmationData `NotOnOrAfter` times. */
     notOnOrAfter: FullDate<UtcTimezone>;
     sessionIndex: string | undefined;
     /**

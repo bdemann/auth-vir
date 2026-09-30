@@ -1,4 +1,4 @@
-// cspell:words adfs dsig idpsso nameid
+// cspell:words dsig idpsso nameid
 import {removeDuplicates, type PartialWithUndefined} from '@augment-vir/common';
 import {generateServiceProviderMetadata} from '@node-saml/node-saml';
 import {type Element} from '@xmldom/xmldom';
@@ -35,8 +35,8 @@ const ssoBindingPreference = [
 ];
 
 /**
- * Parse an IdP's SAML metadata XML (such as ADFS's `FederationMetadata.xml`). Throws an `Error`
- * with a human-readable message if the metadata is invalid.
+ * Parse an IdP's SAML metadata XML (the metadata XML the IdP publishes). Throws an `Error` with a
+ * human-readable message if the metadata is invalid.
  *
  * The metadata's own signature is not checked: the admin who pastes it in is trusted to have
  * obtained it from the right place.

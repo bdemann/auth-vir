@@ -353,7 +353,7 @@ export async function logout(logoutUrl: string) {
 
 ## SAML sign-in (Node.js only)
 
-Verify `SAMLResponse` messages from an enterprise identity provider (such as ADFS), including IdP-initiated sign-in. These exports use Node.js APIs, so they are kept out of the main (browser friendly) entry point and are imported from `auth-vir/dist/saml/index.js`. See the TSDoc comments on each export for full details.
+Verify `SAMLResponse` messages from an enterprise SAML identity provider (for example ADFS, Entra ID, or Okta), including IdP-initiated sign-in. These exports use Node.js APIs, so they are kept out of the main (browser friendly) entry point and are imported from `auth-vir/dist/saml/index.js`. See the TSDoc comments on each export for full details.
 
 -   `parseIdpMetadata`: read the IdP's entity ID, sign-in URL, and signing certificates from its metadata XML.
 -   `generateSpMetadata`: generate your SP metadata XML for the IdP admin to import.

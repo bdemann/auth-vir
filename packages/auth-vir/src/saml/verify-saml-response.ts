@@ -1,4 +1,3 @@
-// cspell:words adfs
 import {
     extractErrorMessage,
     type MaybePromise,
@@ -119,7 +118,7 @@ export type VerifySamlResponseParams = Readonly<{
  * @category SAML
  */
 export type VerifiedSamlProfile = {
-    /** The subject's `NameID`. For ADFS configured for email, this is the user's email address. */
+    /** The subject's `NameID`. With the email NameID format, this is the user's email address. */
     nameId: string;
     nameIdFormat: string | undefined;
     assertionId: string;
@@ -190,8 +189,8 @@ const bearerConfirmationMethod = 'urn:oasis:names:tc:SAML:2.0:cm:bearer';
  * Verify a `SAMLResponse` posted by an IdP and extract the signed profile. Supports IdP-initiated
  * sign-in (no `InResponseTo`).
  *
- * The assertion itself must be signed (this is ADFS's default); a signature on only the outer
- * `Response` is not accepted. Encrypted assertions are not supported.
+ * The assertion itself must be signed; a signature on only the outer `Response` is not accepted.
+ * Encrypted assertions are not supported.
  *
  * Rejections are returned as a typed failure. This only throws for invalid params or when the
  * replay store throws.

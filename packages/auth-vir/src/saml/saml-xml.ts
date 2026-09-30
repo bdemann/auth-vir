@@ -18,6 +18,8 @@ const elementNodeType = 1;
  * Parse an XML string strictly: any parser warning or error is thrown instead of being silently
  * recovered from. Documents with a DOCTYPE are rejected because SAML never needs one and they are
  * the entry point for entity expansion attacks.
+ *
+ * @category Internal
  */
 export function parseStrictXml(xml: string): Element {
     if (xml.includes('<!DOCTYPE')) {
@@ -37,7 +39,11 @@ export function parseStrictXml(xml: string): Element {
     return document.documentElement;
 }
 
-/** Checks if the given element has the given namespace and local name. */
+/**
+ * Checks if the given element has the given namespace and local name.
+ *
+ * @category Internal
+ */
 export function isXmlElement(
     node: Readonly<Node> | null | undefined,
     namespace: SamlNamespace,
@@ -50,7 +56,11 @@ export function isXmlElement(
     );
 }
 
-/** All direct children of `parent` with the given namespace and local name. */
+/**
+ * All direct children of `parent` with the given namespace and local name.
+ *
+ * @category Internal
+ */
 export function getChildElements(
     parent: Readonly<Element>,
     namespace: SamlNamespace,
@@ -65,6 +75,8 @@ export function getChildElements(
  * The single direct child of `parent` with the given namespace and local name. Returns `undefined`
  * when there is none and throws when there is more than one, since duplicates of single-valued SAML
  * elements are a sign of tampering.
+ *
+ * @category Internal
  */
 export function getOnlyChildElement(
     parent: Readonly<Element>,
@@ -85,12 +97,18 @@ export function getOnlyChildElement(
 /**
  * The text of an element with comments removed. (Comments are not part of the signed content, so
  * reading only the first text node would allow comment-truncation attacks.)
+ *
+ * @category Internal
  */
 export function getElementText(element: Readonly<Element>): string {
     return (element.textContent || '').trim();
 }
 
-/** Reads an attribute, treating a missing or empty attribute as `undefined`. */
+/**
+ * Reads an attribute, treating a missing or empty attribute as `undefined`.
+ *
+ * @category Internal
+ */
 export function getAttribute(element: Readonly<Element>, name: string): string | undefined {
     return element.getAttribute(name) || undefined;
 }

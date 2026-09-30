@@ -1,4 +1,8 @@
-import {type MaybePromise, type PartialWithUndefined} from '@augment-vir/common';
+import {
+    extractErrorMessage,
+    type MaybePromise,
+    type PartialWithUndefined,
+} from '@augment-vir/common';
 import {SAML, SamlStatusError, ValidateInResponseTo} from '@node-saml/node-saml';
 import {type Element} from '@xmldom/xmldom';
 import {
@@ -293,7 +297,7 @@ async function getSignedAssertionXml(params: VerifySamlResponseParams): Promise<
             throw error;
         }
 
-        const message = error instanceof Error ? error.message : String(error);
+        const message = extractErrorMessage(error);
 
         if (error instanceof SamlStatusError) {
             throw new SamlVerifyError(SamlVerifyFailureReason.IdpStatusError, message);
@@ -373,10 +377,7 @@ function parseAssertion(assertionXml: string): Element {
     try {
         assertion = parseStrictXml(assertionXml);
     } catch (error) {
-        throw new SamlVerifyError(
-            SamlVerifyFailureReason.Malformed,
-            error instanceof Error ? error.message : String(error),
-        );
+        throw new SamlVerifyError(SamlVerifyFailureReason.Malformed, extractErrorMessage(error));
     }
 
     if (!isXmlElement(assertion, SamlNamespace.Assertion, 'Assertion')) {
@@ -398,10 +399,7 @@ function getChild(
     try {
         return getOnlyChildElement(parent, namespace, localName);
     } catch (error) {
-        throw new SamlVerifyError(
-            SamlVerifyFailureReason.Malformed,
-            error instanceof Error ? error.message : String(error),
-        );
+        throw new SamlVerifyError(SamlVerifyFailureReason.Malformed, extractErrorMessage(error));
     }
 }
 

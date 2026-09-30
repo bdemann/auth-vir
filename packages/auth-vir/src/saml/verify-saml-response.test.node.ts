@@ -589,11 +589,34 @@ describe(verifySamlResponse.name, () => {
             await assert.throws(
                 () => {
                     return verify(createMockSamlResponse(), {
+                        idp: {
+                            entityId: '',
+                            signingCertificates: [mockIdpKeys.current.certificate],
+                        },
+                    });
+                },
+                {
+                    matchMessage: 'An IdP entity ID is required.',
+                },
+            );
+            await assert.throws(
+                () => {
+                    return verify(createMockSamlResponse(), {
+                        spEntityId: '',
+                    });
+                },
+                {
+                    matchMessage: 'An SP entity ID is required.',
+                },
+            );
+            await assert.throws(
+                () => {
+                    return verify(createMockSamlResponse(), {
                         acsUrl: '',
                     });
                 },
                 {
-                    matchMessage: 'required',
+                    matchMessage: 'An ACS URL is required.',
                 },
             );
             await assert.throws(
@@ -605,7 +628,19 @@ describe(verifySamlResponse.name, () => {
                     });
                 },
                 {
-                    matchMessage: 'negative',
+                    matchMessage: 'SAML clock skew cannot be negative.',
+                },
+            );
+            await assert.throws(
+                () => {
+                    return verify(createMockSamlResponse(), {
+                        clockSkew: {
+                            minutes: Number.NaN,
+                        },
+                    });
+                },
+                {
+                    matchMessage: 'SAML clock skew is not a valid duration.',
                 },
             );
         });

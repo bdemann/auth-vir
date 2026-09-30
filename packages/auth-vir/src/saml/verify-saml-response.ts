@@ -2,6 +2,7 @@ import {
     extractErrorMessage,
     type MaybePromise,
     type PartialWithUndefined,
+    wrapInTry,
 } from '@augment-vir/common';
 import {SAML, SamlStatusError, ValidateInResponseTo} from '@node-saml/node-saml';
 import {type Element} from '@xmldom/xmldom';
@@ -200,13 +201,39 @@ const bearerConfirmationMethod = 'urn:oasis:names:tc:SAML:2.0:cm:bearer';
 export async function verifySamlResponse(
     params: VerifySamlResponseParams,
 ): Promise<VerifySamlResponseResult> {
-    const clockSkewMs = getClockSkewMs(params.clockSkew);
+    const requestedClockSkewMs = wrapInTry(
+        () => {
+            return convertDuration(params.clockSkew || defaultSamlClockSkew, {
+                milliseconds: true,
+            }).milliseconds;
+        },
+        {
+            handleError: (error) => {
+                throw new TypeError('SAML clock skew is not a valid duration.', {
+                    cause: error,
+                });
+            },
+        },
+    );
 
     if (!params.idp.signingCertificates.length) {
         throw new TypeError('At least one IdP signing certificate is required.');
-    } else if (!params.idp.entityId || !params.spEntityId || !params.acsUrl) {
-        throw new TypeError('IdP entity ID, SP entity ID, and ACS URL are all required.');
+    } else if (!params.idp.entityId) {
+        throw new TypeError('An IdP entity ID is required.');
+    } else if (!params.spEntityId) {
+        throw new TypeError('An SP entity ID is required.');
+    } else if (!params.acsUrl) {
+        throw new TypeError('An ACS URL is required.');
+    } else if (requestedClockSkewMs < 0) {
+        throw new TypeError('SAML clock skew cannot be negative.');
     }
+
+    const clockSkewMs = Math.min(
+        requestedClockSkewMs,
+        convertDuration(maxSamlClockSkew, {
+            milliseconds: true,
+        }).milliseconds,
+    );
 
     try {
         const assertionXml = await getSignedAssertionXml(params);
@@ -243,21 +270,6 @@ export async function verifySamlResponse(
         }
         throw error;
     }
-}
-
-function getClockSkewMs(clockSkew: Readonly<AnyDuration> | undefined): number {
-    const clockSkewMs = convertDuration(clockSkew || defaultSamlClockSkew, {
-        milliseconds: true,
-    }).milliseconds;
-    const maxClockSkewMs = convertDuration(maxSamlClockSkew, {
-        milliseconds: true,
-    }).milliseconds;
-
-    if (Number.isNaN(clockSkewMs) || clockSkewMs < 0) {
-        throw new TypeError('SAML clock skew cannot be negative.');
-    }
-
-    return Math.min(clockSkewMs, maxClockSkewMs);
 }
 
 /**
@@ -320,7 +332,20 @@ function readVerifiedAssertion({
     clockSkewMs: number;
     nowMs: number;
 }>): VerifiedSamlProfile {
-    const assertion = parseAssertion(assertionXml);
+    const assertion = wrapInTry(() => parseStrictXml(assertionXml), {
+        handleError: (error) => {
+            throw new SamlVerifyError(
+                SamlVerifyFailureReason.Malformed,
+                extractErrorMessage(error),
+            );
+        },
+    });
+    if (!isXmlElement(assertion, SamlNamespace.Assertion, 'Assertion')) {
+        throw new SamlVerifyError(
+            SamlVerifyFailureReason.Malformed,
+            'Signed content is not a SAML 2.0 Assertion.',
+        );
+    }
 
     const assertionId = getAttribute(assertion, 'ID');
     if (!assertionId) {
@@ -370,24 +395,6 @@ function readVerifiedAssertion({
         sessionIndex: authnStatement ? getAttribute(authnStatement, 'SessionIndex') : undefined,
         attributes: readAttributes(assertion),
     };
-}
-
-function parseAssertion(assertionXml: string): Element {
-    let assertion: Element;
-    try {
-        assertion = parseStrictXml(assertionXml);
-    } catch (error) {
-        throw new SamlVerifyError(SamlVerifyFailureReason.Malformed, extractErrorMessage(error));
-    }
-
-    if (!isXmlElement(assertion, SamlNamespace.Assertion, 'Assertion')) {
-        throw new SamlVerifyError(
-            SamlVerifyFailureReason.Malformed,
-            'Signed content is not a SAML 2.0 Assertion.',
-        );
-    }
-
-    return assertion;
 }
 
 /** Wraps {@link getOnlyChildElement} so that duplicate elements become a typed failure. */
@@ -525,16 +532,9 @@ function checkBearerConfirmation({
         );
     }
 
-    /** Report the first confirmation's failure since most IdPs only send one. */
-    let firstError = new SamlVerifyError(
-        SamlVerifyFailureReason.Malformed,
-        'No bearer SubjectConfirmation was valid.',
-    );
+    const errors: SamlVerifyError[] = [];
 
-    for (const [
-        index,
-        confirmation,
-    ] of bearerConfirmations.entries()) {
+    for (const confirmation of bearerConfirmations) {
         try {
             return checkSubjectConfirmationData({
                 confirmation,
@@ -543,15 +543,22 @@ function checkBearerConfirmation({
                 clockSkewMs,
             });
         } catch (error) {
-            if (!(error instanceof SamlVerifyError)) {
+            if (error instanceof SamlVerifyError) {
+                errors.push(error);
+            } else {
                 throw error;
-            } else if (!index) {
-                firstError = error;
             }
         }
     }
 
-    throw firstError;
+    /** Report the first confirmation's failure since most IdPs only send one. */
+    throw (
+        errors[0] ??
+        new SamlVerifyError(
+            SamlVerifyFailureReason.Malformed,
+            'No bearer SubjectConfirmation was valid.',
+        )
+    );
 }
 
 function checkSubjectConfirmationData({

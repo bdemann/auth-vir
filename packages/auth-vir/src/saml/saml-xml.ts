@@ -23,7 +23,7 @@ const elementNodeType = 1;
  * @category Internal
  */
 export function parseStrictXml(xml: string): Element {
-    if (xml.includes('<!DOCTYPE')) {
+    if (/<!DOCTYPE/i.test(xml)) {
         throw new Error('XML with a DOCTYPE is not allowed.');
     }
 

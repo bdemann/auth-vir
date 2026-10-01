@@ -1,4 +1,4 @@
-// cspell:words msis nameid samlp
+// cspell:words msis nameid samlp xmldsig
 /* eslint-disable unicorn/prefer-dom-node-append, unicorn/prefer-dom-node-remove, unicorn/prefer-modern-dom-apis -- xmldom does not implement the modern DOM methods these rules suggest. */
 import {assert, assertWrap} from '@augment-vir/assert';
 import {describe, it} from '@augment-vir/test';
@@ -341,6 +341,32 @@ describe(verifySamlResponse.name, () => {
                 SamlVerifyFailureReason.InvalidSignature,
             );
         });
+
+        it('rejects a SHA-1 signature', async () => {
+            const result = await verify(
+                createMockSamlResponse({
+                    hashAlgorithm: 'sha1',
+                }),
+            );
+
+            assert.isFalse(result.success);
+            assert.strictEquals(result.reason, SamlVerifyFailureReason.InvalidSignature);
+            assert.isTrue(result.detail.includes('SHA-1'), result.detail);
+        });
+
+        it('rejects a SHA-1 signature whose algorithm is written as a character reference', async () => {
+            /** Canonicalization expands the reference, so the signature itself still verifies. */
+            const xml = createMockSamlResponseXml({
+                hashAlgorithm: 'sha1',
+            }).replace('xmldsig#rsa-sha1', 'xmldsig&#x23;rsa-sha1');
+            assert.isTrue(xml.includes('xmldsig&#x23;rsa-sha1'));
+
+            const result = await verify(encodeSamlResponse(xml));
+
+            assert.isFalse(result.success);
+            assert.strictEquals(result.reason, SamlVerifyFailureReason.InvalidSignature);
+            assert.isTrue(result.detail.includes('SHA-1'), result.detail);
+        });
     });
 
     describe('conditions', () => {
@@ -559,6 +585,16 @@ describe(verifySamlResponse.name, () => {
                 Buffer.from('not xml at all').toString('base64'),
                 SamlVerifyFailureReason.Malformed,
             );
+        });
+
+        it('rejects a response with a DOCTYPE', async () => {
+            const result = await verify(
+                encodeSamlResponse(`<!DOCTYPE samlp:Response>${createMockSamlResponseXml()}`),
+            );
+
+            assert.isFalse(result.success);
+            assert.strictEquals(result.reason, SamlVerifyFailureReason.Malformed);
+            assert.isTrue(result.detail.includes('DOCTYPE'), result.detail);
         });
 
         it('reports an IdP error status', async () => {

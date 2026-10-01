@@ -53,7 +53,22 @@ export type MockSamlResponseParams = Partial<{
     attributes: Readonly<Record<string, ReadonlyArray<string>>>;
     signedElements: 'assertion' | 'response' | 'both' | 'none';
     signingKey: MockIdpKeyPair;
+    /** Defaults to `'sha256'`, which is what ADFS uses. */
+    hashAlgorithm: MockHashAlgorithm;
 }>;
+
+export type MockHashAlgorithm = 'sha256' | 'sha1';
+
+const mockHashAlgorithms: Record<MockHashAlgorithm, {signature: string; digest: string}> = {
+    sha256: {
+        signature: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
+        digest: 'http://www.w3.org/2001/04/xmlenc#sha256',
+    },
+    sha1: {
+        signature: 'http://www.w3.org/2000/09/xmldsig#rsa-sha1',
+        digest: 'http://www.w3.org/2000/09/xmldsig#sha1',
+    },
+};
 
 export function fromNow(duration: Readonly<AnyDuration>): FullDate<UtcTimezone> {
     return calculateRelativeDate(getNowInUtcTimezone(), duration);
@@ -67,20 +82,25 @@ function escapeXml(value: string): string {
         .replaceAll('"', '&quot;');
 }
 
-const signatureAlgorithm = 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256';
 const exclusiveC14n = 'http://www.w3.org/2001/10/xml-exc-c14n#';
 
-function signElement(
-    xml: string,
-    localName: 'Assertion' | 'Response',
-    signingKey: MockIdpKeyPair,
-): string {
+function signElement({
+    xml,
+    localName,
+    signingKey,
+    hashAlgorithm,
+}: Readonly<{
+    xml: string;
+    localName: 'Assertion' | 'Response';
+    signingKey: MockIdpKeyPair;
+    hashAlgorithm: MockHashAlgorithm;
+}>): string {
     const elementXpath = `//*[local-name(.)='${localName}']`;
     const signedXml = new SignedXml({
         privateKey: signingKey.privateKey,
         /** Embeds the signer's certificate in KeyInfo, like ADFS does. It must never be trusted. */
         publicCert: signingKey.certificate,
-        signatureAlgorithm,
+        signatureAlgorithm: mockHashAlgorithms[hashAlgorithm].signature,
         canonicalizationAlgorithm: exclusiveC14n,
     });
     signedXml.addReference({
@@ -89,7 +109,7 @@ function signElement(
             'http://www.w3.org/2000/09/xmldsig#enveloped-signature',
             exclusiveC14n,
         ],
-        digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
+        digestAlgorithm: mockHashAlgorithms[hashAlgorithm].digest,
     });
     signedXml.computeSignature(xml, {
         prefix: 'ds',
@@ -171,14 +191,25 @@ export function createMockSamlResponseXml(params: MockSamlResponseParams = {}): 
 
     const signedElements = params.signedElements || 'assertion';
     const signingKey = params.signingKey || mockIdpKeys.current;
+    const hashAlgorithm = params.hashAlgorithm || 'sha256';
 
     const withAssertionSignature =
         signedElements === 'assertion' || signedElements === 'both'
-            ? signElement(xml, 'Assertion', signingKey)
+            ? signElement({
+                  xml,
+                  localName: 'Assertion',
+                  signingKey,
+                  hashAlgorithm,
+              })
             : xml;
 
     return signedElements === 'response' || signedElements === 'both'
-        ? signElement(withAssertionSignature, 'Response', signingKey)
+        ? signElement({
+              xml: withAssertionSignature,
+              localName: 'Response',
+              signingKey,
+              hashAlgorithm,
+          })
         : withAssertionSignature;
 }
 

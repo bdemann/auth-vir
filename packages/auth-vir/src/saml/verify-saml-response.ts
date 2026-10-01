@@ -1,3 +1,4 @@
+// cspell:words dsig xmldsig
 import {
     extractErrorMessage,
     type MaybePromise,
@@ -146,7 +147,10 @@ export enum SamlVerifyFailureReason {
      * altered or moved (signature wrapping).
      */
     InvalidSignature = 'invalid-signature',
-    /** The IdP responded with an error status instead of an assertion. */
+    /**
+     * The IdP responded with an error status instead of an assertion. The status is not signed, so
+     * its `detail` text can be written by anyone who can post to the ACS URL.
+     */
     IdpStatusError = 'idp-status-error',
     WrongIssuer = 'wrong-issuer',
     WrongAudience = 'wrong-audience',
@@ -170,7 +174,10 @@ export type VerifySamlResponseResult =
     | {
           success: false;
           reason: SamlVerifyFailureReason;
-          /** Human-readable detail for logs. Do not show this to the end user. */
+          /**
+           * Human-readable detail for logs. Do not show this to the end user, and treat it as
+           * untrusted text: it can include unsigned content from the message.
+           */
           detail: string;
       };
 
@@ -277,6 +284,35 @@ export async function verifySamlResponse(
  * other checks happen in {@link readVerifiedAssertion} so that they read only signed content.
  */
 async function getSignedAssertionXml(params: VerifySamlResponseParams): Promise<string> {
+    /** Applies the strict parse (no DOCTYPE) to the whole message, not just the signed assertion. */
+    const response = wrapInTry(
+        () => {
+            return parseStrictXml(Buffer.from(params.samlResponse, 'base64').toString('utf8'));
+        },
+        {
+            handleError: (error) => {
+                throw new SamlVerifyError(
+                    SamlVerifyFailureReason.Malformed,
+                    extractErrorMessage(error),
+                );
+            },
+        },
+    );
+    /**
+     * Node-saml has no algorithm allow-list. Parsed attribute values are checked because a
+     * character reference (`xmldsig&#x23;rsa-sha1`) hides the algorithm from a text match but not
+     * from the signature check.
+     */
+    const sha1Algorithm = Array.from(response.getElementsByTagNameNS(SamlNamespace.XmlDsig, '*'))
+        .map((element) => getAttribute(element, 'Algorithm'))
+        .find((algorithm) => algorithm && /sha1$/i.test(algorithm));
+    if (sha1Algorithm) {
+        throw new SamlVerifyError(
+            SamlVerifyFailureReason.InvalidSignature,
+            `SHA-1 signatures are not accepted: '${sha1Algorithm}'.`,
+        );
+    }
+
     const saml = new SAML({
         idpCert: [...params.idp.signingCertificates],
         issuer: params.spEntityId,

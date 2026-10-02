@@ -268,6 +268,41 @@ async function createUserInDatabase(
 }
 ```
 
+#### SAML sign-in
+
+Verify `SAMLResponse` messages from an enterprise SAML identity provider (for example ADFS, Entra ID, or Okta), including IdP-initiated sign-in. These are imported from `auth-vir/dist/saml/index.js`, separate from the browser friendly main entry point. See the TSDoc comments on each export for full details.
+
+-   `parseIdpMetadata`: read the IdP's entity ID, sign-in URL, and signing certificates from its metadata XML.
+-   `generateSpMetadata`: generate your SP metadata XML for the IdP admin to import.
+-   `verifySamlResponse`: verify a posted `SAMLResponse` and get the signed profile (NameID and attributes) or a typed failure reason.
+
+```TypeScript
+import {verifySamlResponse} from 'auth-vir/dist/saml/index.js';
+
+const result = await verifySamlResponse({
+    /** Usually the output of `parseIdpMetadata`, stored per organization. */
+    idp: {
+        entityId: 'http://adfs.example.com/adfs/services/trust',
+        signingCertificates: ['-----BEGIN CERTIFICATE-----...'],
+    },
+    spEntityId: 'https://app.example.com/sso/saml/metadata',
+    acsUrl: 'https://app.example.com/sso/saml/acs/example-org',
+    samlResponse: requestBody.SAMLResponse,
+    /** Back this with a database table that has a unique assertion ID column. */
+    replayStore: {
+        async markAssertionUsed({assertionId, expiresAt}) {
+            return await insertIfNotExists({assertionId, expiresAt});
+        },
+    },
+});
+
+if (result.success) {
+    /** `result.profile.nameId` and `result.profile.attributes` are safe to trust. */
+} else {
+    /** Log `result.reason` and `result.detail`, but do not show them to the user. */
+}
+```
+
 ### Client / frontend side
 
 Use this on your client / frontend for storing and sending session authorization.
@@ -348,41 +383,6 @@ export async function logout(logoutUrl: string) {
     await sendAuthenticatedRequest(logoutUrl, {
         method: 'post',
     });
-}
-```
-
-## SAML sign-in (Node.js only)
-
-Verify `SAMLResponse` messages from an enterprise SAML identity provider (for example ADFS, Entra ID, or Okta), including IdP-initiated sign-in. These exports use Node.js APIs, so they are kept out of the main (browser friendly) entry point and are imported from `auth-vir/dist/saml/index.js`. See the TSDoc comments on each export for full details.
-
--   `parseIdpMetadata`: read the IdP's entity ID, sign-in URL, and signing certificates from its metadata XML.
--   `generateSpMetadata`: generate your SP metadata XML for the IdP admin to import.
--   `verifySamlResponse`: verify a posted `SAMLResponse` and get the signed profile (NameID and attributes) or a typed failure reason.
-
-```TypeScript
-import {verifySamlResponse} from 'auth-vir/dist/saml/index.js';
-
-const result = await verifySamlResponse({
-    /** Usually the output of `parseIdpMetadata`, stored per organization. */
-    idp: {
-        entityId: 'http://adfs.example.com/adfs/services/trust',
-        signingCertificates: ['-----BEGIN CERTIFICATE-----...'],
-    },
-    spEntityId: 'https://app.example.com/sso/saml/metadata',
-    acsUrl: 'https://app.example.com/sso/saml/acs/example-org',
-    samlResponse: requestBody.SAMLResponse,
-    /** Back this with a database table that has a unique assertion ID column. */
-    replayStore: {
-        async markAssertionUsed({assertionId, expiresAt}) {
-            return await insertIfNotExists({assertionId, expiresAt});
-        },
-    },
-});
-
-if (result.success) {
-    /** `result.profile.nameId` and `result.profile.attributes` are safe to trust. */
-} else {
-    /** Log `result.reason` and `result.detail`, but do not show them to the user. */
 }
 ```
 

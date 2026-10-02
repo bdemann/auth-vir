@@ -50,6 +50,11 @@ export type MockSamlResponseParams = Partial<{
     notOnOrAfter: FullDate<UtcTimezone>;
     /** The bearer SubjectConfirmationData's NotOnOrAfter. Defaults to `notOnOrAfter`. */
     subjectNotOnOrAfter: FullDate<UtcTimezone>;
+    /**
+     * Written verbatim as the Conditions NotOnOrAfter, to test time strings `FullDate` can't
+     * produce.
+     */
+    conditionsNotOnOrAfterText: string;
     attributes: Readonly<Record<string, ReadonlyArray<string>>>;
     signedElements: 'assertion' | 'response' | 'both' | 'none';
     signingKey: MockIdpKeyPair;
@@ -139,6 +144,7 @@ export function createMockSamlResponseXml(params: MockSamlResponseParams = {}): 
                 minutes: 5,
             }),
     );
+    const conditionsNotOnOrAfter = params.conditionsNotOnOrAfterText ?? notOnOrAfter;
     const subjectNotOnOrAfter = params.subjectNotOnOrAfter
         ? toUtcIsoString(params.subjectNotOnOrAfter)
         : notOnOrAfter;
@@ -178,7 +184,7 @@ export function createMockSamlResponseXml(params: MockSamlResponseParams = {}): 
         `<saml:SubjectConfirmationData NotOnOrAfter="${subjectNotOnOrAfter}" Recipient="${recipient}"/>`,
         '</saml:SubjectConfirmation>',
         '</saml:Subject>',
-        `<saml:Conditions NotBefore="${notBefore}" NotOnOrAfter="${notOnOrAfter}">`,
+        `<saml:Conditions NotBefore="${notBefore}" NotOnOrAfter="${conditionsNotOnOrAfter}">`,
         `<saml:AudienceRestriction>${audiences}</saml:AudienceRestriction>`,
         '</saml:Conditions>',
         `<saml:AttributeStatement>${attributes}</saml:AttributeStatement>`,

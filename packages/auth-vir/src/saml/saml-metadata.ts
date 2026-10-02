@@ -16,7 +16,7 @@ import {
  * The parts of an IdP's SAML metadata needed to accept sign-ins from it. Output of
  * {@link parseIdpMetadata}.
  *
- * @category SAML
+ * @category Internal
  */
 export type ParsedIdpMetadata = {
     entityId: string;
@@ -29,6 +29,10 @@ export type ParsedIdpMetadata = {
     signingCertificates: string[];
 };
 
+/**
+ * The SAML bindings `ssoUrl` can come from, most preferred first. HTTP-Redirect is a plain link the
+ * app can send users to for SP-initiated sign-in; HTTP-POST needs an auto-submitting form instead.
+ */
 const ssoBindingPreference = [
     'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect',
     'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST',
@@ -81,10 +85,13 @@ function readSsoUrl(idpDescriptor: Readonly<Element>): string {
     const services = getChildElements(idpDescriptor, SamlNamespace.Metadata, 'SingleSignOnService');
 
     for (const binding of ssoBindingPreference) {
-        const location = services
-            .filter((service) => getAttribute(service, 'Binding') === binding)
-            .map((service) => getAttribute(service, 'Location'))
-            .find((serviceLocation) => serviceLocation);
+        const service = services.find((candidate) => {
+            return (
+                getAttribute(candidate, 'Binding') === binding &&
+                getAttribute(candidate, 'Location')
+            );
+        });
+        const location = service && getAttribute(service, 'Location');
 
         if (location) {
             return location;
@@ -99,10 +106,10 @@ function readSigningCertificates(idpDescriptor: Readonly<Element>): string[] {
         /** A KeyDescriptor without a `use` is usable for both signing and encryption. */
         .filter((keyDescriptor) => (getAttribute(keyDescriptor, 'use') ?? 'signing') === 'signing')
         .flatMap((keyDescriptor) => {
-            return getChildElements(keyDescriptor, SamlNamespace.XmlDsig, 'KeyInfo');
+            return Array.from(
+                keyDescriptor.getElementsByTagNameNS(SamlNamespace.XmlDsig, 'X509Certificate'),
+            );
         })
-        .flatMap((keyInfo) => getChildElements(keyInfo, SamlNamespace.XmlDsig, 'X509Data'))
-        .flatMap((x509Data) => getChildElements(x509Data, SamlNamespace.XmlDsig, 'X509Certificate'))
         .map((certificate) => toPemCertificate(getElementText(certificate)));
 
     return removeDuplicates(certificates);
@@ -127,7 +134,7 @@ function toPemCertificate(base64Certificate: string): string {
 /**
  * Params for {@link generateSpMetadata}.
  *
- * @category SAML
+ * @category Internal
  */
 export type GenerateSpMetadataParams = Readonly<{
     /** Our SP entity ID. Must match `spEntityId` given to `verifySamlResponse`. */

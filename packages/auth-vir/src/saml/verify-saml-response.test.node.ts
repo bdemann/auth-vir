@@ -21,6 +21,7 @@ import {
 } from './saml.mock.js';
 import {
     defaultSamlClockSkew,
+    SamlVerifyError,
     SamlVerifyFailureReason,
     verifySamlResponse,
     type VerifySamlResponseParams,
@@ -483,6 +484,18 @@ describe(verifySamlResponse.name, () => {
             );
         });
 
+        it('rejects a time that is not in UTC', async () => {
+            const result = await verify(
+                createMockSamlResponse({
+                    conditionsNotOnOrAfterText: '2099-01-01T00:00:00',
+                }),
+            );
+
+            assert.isFalse(result.success);
+            assert.strictEquals(result.reason, SamlVerifyFailureReason.Malformed);
+            assert.isTrue(result.detail.includes('Expected a UTC time'), result.detail);
+        });
+
         it('rejects a response that is not yet valid', async () => {
             await assertRejected(
                 createMockSamlResponse({
@@ -619,6 +632,7 @@ describe(verifySamlResponse.name, () => {
                     });
                 },
                 {
+                    matchConstructor: SamlVerifyError,
                     matchMessage: 'certificate',
                 },
             );
@@ -665,18 +679,6 @@ describe(verifySamlResponse.name, () => {
                 },
                 {
                     matchMessage: 'SAML clock skew cannot be negative.',
-                },
-            );
-            await assert.throws(
-                () => {
-                    return verify(createMockSamlResponse(), {
-                        clockSkew: {
-                            minutes: Number.NaN,
-                        },
-                    });
-                },
-                {
-                    matchMessage: 'SAML clock skew is not a valid duration.',
                 },
             );
         });

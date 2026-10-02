@@ -30,7 +30,7 @@ import {
  * The stored settings for an organization's SAML identity provider (IdP), usually obtained from
  * `parseIdpMetadata`.
  *
- * @category SAML
+ * @category Internal
  */
 export type SamlIdpSettings = Readonly<{
     /** The IdP's entity ID. Assertions whose `Issuer` does not match this exactly are rejected. */
@@ -46,7 +46,7 @@ export type SamlIdpSettings = Readonly<{
  * Records which assertion IDs have already been used, to prevent a captured `SAMLResponse` from
  * being replayed. For IdP-initiated sign-in (no `InResponseTo`) this is the only replay defense.
  *
- * @category SAML
+ * @category Internal
  */
 export type SamlAssertionReplayStore = Readonly<{
     /**
@@ -66,7 +66,7 @@ export type SamlAssertionReplayStore = Readonly<{
 /**
  * Default allowed clock skew between the SP and the IdP for SAML timestamp checks.
  *
- * @category SAML
+ * @category Internal
  * @default {minutes: 2}
  */
 export const defaultSamlClockSkew: Readonly<AnyDuration> = {
@@ -76,7 +76,7 @@ export const defaultSamlClockSkew: Readonly<AnyDuration> = {
 /**
  * The largest clock skew that {@link verifySamlResponse} will accept.
  *
- * @category SAML
+ * @category Internal
  * @default {minutes: 5}
  */
 export const maxSamlClockSkew: Readonly<AnyDuration> = {
@@ -86,7 +86,7 @@ export const maxSamlClockSkew: Readonly<AnyDuration> = {
 /**
  * Params for {@link verifySamlResponse}.
  *
- * @category SAML
+ * @category Internal
  */
 export type VerifySamlResponseParams = Readonly<{
     idp: SamlIdpSettings;
@@ -117,7 +117,7 @@ export type VerifySamlResponseParams = Readonly<{
  * A SAML assertion that passed every check in {@link verifySamlResponse}. Every value here was read
  * from the signed part of the message.
  *
- * @category SAML
+ * @category Internal
  */
 export type VerifiedSamlProfile = {
     /** The subject's `NameID`. With the email NameID format, this is the user's email address. */
@@ -137,9 +137,11 @@ export type VerifiedSamlProfile = {
 /**
  * Why {@link verifySamlResponse} rejected a message.
  *
- * @category SAML
+ * @category Internal
  */
 export enum SamlVerifyFailureReason {
+    /** The params passed to {@link verifySamlResponse} are invalid. This is thrown, never returned. */
+    InvalidParams = 'invalid-params',
     /** The message could not be parsed or is missing required SAML elements. */
     Malformed = 'malformed',
     /**
@@ -164,7 +166,7 @@ export enum SamlVerifyFailureReason {
 /**
  * Output of {@link verifySamlResponse}.
  *
- * @category SAML
+ * @category Internal
  */
 export type VerifySamlResponseResult =
     | {
@@ -181,13 +183,21 @@ export type VerifySamlResponseResult =
           detail: string;
       };
 
-class SamlVerifyError extends Error {
+/**
+ * An error from {@link verifySamlResponse}. Rejected messages are returned as a typed failure built
+ * from this error; invalid params throw it with reason
+ * {@link SamlVerifyFailureReason.InvalidParams}.
+ *
+ * @category Internal
+ */
+export class SamlVerifyError extends Error {
     public override readonly name = 'SamlVerifyError';
     constructor(
         public readonly reason: SamlVerifyFailureReason,
         message: string,
+        options?: ErrorOptions,
     ) {
-        super(message);
+        super(message, options);
     }
 }
 
@@ -200,7 +210,8 @@ const bearerConfirmationMethod = 'urn:oasis:names:tc:SAML:2.0:cm:bearer';
  * The assertion itself must be signed; a signature on only the outer `Response` is not accepted.
  * Encrypted assertions are not supported.
  *
- * Rejections are returned as a typed failure. This only throws for invalid params or when the
+ * Rejections are returned as a typed failure. This only throws for invalid params (a
+ * {@link SamlVerifyError} with reason {@link SamlVerifyFailureReason.InvalidParams}) or when the
  * replay store throws.
  *
  * @category SAML
@@ -208,31 +219,32 @@ const bearerConfirmationMethod = 'urn:oasis:names:tc:SAML:2.0:cm:bearer';
 export async function verifySamlResponse(
     params: VerifySamlResponseParams,
 ): Promise<VerifySamlResponseResult> {
-    const requestedClockSkewMs = wrapInTry(
-        () => {
-            return convertDuration(params.clockSkew || defaultSamlClockSkew, {
-                milliseconds: true,
-            }).milliseconds;
-        },
-        {
-            handleError: (error) => {
-                throw new TypeError('SAML clock skew is not a valid duration.', {
-                    cause: error,
-                });
-            },
-        },
-    );
+    const requestedClockSkewMs = convertDuration(params.clockSkew || defaultSamlClockSkew, {
+        milliseconds: true,
+    }).milliseconds;
 
     if (!params.idp.signingCertificates.length) {
-        throw new TypeError('At least one IdP signing certificate is required.');
+        throw new SamlVerifyError(
+            SamlVerifyFailureReason.InvalidParams,
+            'At least one IdP signing certificate is required.',
+        );
     } else if (!params.idp.entityId) {
-        throw new TypeError('An IdP entity ID is required.');
+        throw new SamlVerifyError(
+            SamlVerifyFailureReason.InvalidParams,
+            'An IdP entity ID is required.',
+        );
     } else if (!params.spEntityId) {
-        throw new TypeError('An SP entity ID is required.');
+        throw new SamlVerifyError(
+            SamlVerifyFailureReason.InvalidParams,
+            'An SP entity ID is required.',
+        );
     } else if (!params.acsUrl) {
-        throw new TypeError('An ACS URL is required.');
+        throw new SamlVerifyError(SamlVerifyFailureReason.InvalidParams, 'An ACS URL is required.');
     } else if (requestedClockSkewMs < 0) {
-        throw new TypeError('SAML clock skew cannot be negative.');
+        throw new SamlVerifyError(
+            SamlVerifyFailureReason.InvalidParams,
+            'SAML clock skew cannot be negative.',
+        );
     }
 
     const clockSkewMs = Math.min(
@@ -294,6 +306,9 @@ async function getSignedAssertionXml(params: VerifySamlResponseParams): Promise<
                 throw new SamlVerifyError(
                     SamlVerifyFailureReason.Malformed,
                     extractErrorMessage(error),
+                    {
+                        cause: error,
+                    },
                 );
             },
         },
@@ -347,12 +362,16 @@ async function getSignedAssertionXml(params: VerifySamlResponseParams): Promise<
 
         const message = extractErrorMessage(error);
 
+        const options = {
+            cause: error,
+        };
+
         if (error instanceof SamlStatusError) {
-            throw new SamlVerifyError(SamlVerifyFailureReason.IdpStatusError, message);
+            throw new SamlVerifyError(SamlVerifyFailureReason.IdpStatusError, message, options);
         } else if (/signature/i.test(message)) {
-            throw new SamlVerifyError(SamlVerifyFailureReason.InvalidSignature, message);
+            throw new SamlVerifyError(SamlVerifyFailureReason.InvalidSignature, message, options);
         } else {
-            throw new SamlVerifyError(SamlVerifyFailureReason.Malformed, message);
+            throw new SamlVerifyError(SamlVerifyFailureReason.Malformed, message, options);
         }
     }
 }
@@ -373,6 +392,9 @@ function readVerifiedAssertion({
             throw new SamlVerifyError(
                 SamlVerifyFailureReason.Malformed,
                 extractErrorMessage(error),
+                {
+                    cause: error,
+                },
             );
         },
     });
@@ -442,7 +464,9 @@ function getChild(
     try {
         return getOnlyChildElement(parent, namespace, localName);
     } catch (error) {
-        throw new SamlVerifyError(SamlVerifyFailureReason.Malformed, extractErrorMessage(error));
+        throw new SamlVerifyError(SamlVerifyFailureReason.Malformed, extractErrorMessage(error), {
+            cause: error,
+        });
     }
 }
 
@@ -461,20 +485,35 @@ function requireChild(
     return child;
 }
 
+/**
+ * SAML times are UTC `xs:dateTime` strings (SAML core 1.3.3), such as `2026-09-30T16:04:05Z`, with
+ * optional fractional seconds. A time with no `Z` would be read in the server's local timezone.
+ */
+const samlTimeRegExp = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+
 function parseSamlTime(element: Readonly<Element>, attributeName: string): number | undefined {
     const value = getAttribute(element, attributeName);
     if (value == undefined) {
         return undefined;
     }
 
-    const timestamp = Date.parse(value);
-    if (Number.isNaN(timestamp)) {
-        throw new SamlVerifyError(
-            SamlVerifyFailureReason.Malformed,
-            `Invalid ${attributeName} time: '${value}'.`,
-        );
+    const invalidTimeMessage = `Invalid ${attributeName} time: '${value}'. Expected a UTC time like '2026-09-30T16:04:05Z'.`;
+    if (!samlTimeRegExp.test(value)) {
+        throw new SamlVerifyError(SamlVerifyFailureReason.Malformed, invalidTimeMessage);
     }
-    return timestamp;
+
+    return wrapInTry(
+        () => {
+            return toTimestamp(createUtcFullDate(value));
+        },
+        {
+            handleError: (error) => {
+                throw new SamlVerifyError(SamlVerifyFailureReason.Malformed, invalidTimeMessage, {
+                    cause: error,
+                });
+            },
+        },
+    );
 }
 
 /**
